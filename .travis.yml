@@ -5,3 +5,5 @@ cache:
     - $HOME/.m2
 script:
   - mvn clean install -Pcoverage coveralls:report --batch-mode --errors
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

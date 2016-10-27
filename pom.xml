@@ -81,30 +81,21 @@
                     <plugin>
                         <groupId>org.jacoco</groupId>
                         <artifactId>jacoco-maven-plugin</artifactId>
-                        <version>0.7.6.201602180812</version>
+                        <version>0.7.7.201606060606</version>
                         <executions>
                             <execution>
-                                <id>default-prepare-agent</id>
                                 <goals>
                                     <goal>prepare-agent</goal>
                                 </goals>
                             </execution>
                             <execution>
-                                <id>default-report</id>
-                                <phase>prepare-package</phase>
+                                <id>report</id>
+                                <phase>test</phase>
                                 <goals>
                                     <goal>report</goal>
                                 </goals>
                             </execution>
                         </executions>
-                    </plugin>
-                    <plugin>
-                        <groupId>org.eluder.coveralls</groupId>
-                        <artifactId>coveralls-maven-plugin</artifactId>
-                        <version>4.1.0</version>
-                        <configuration>
-                            <timestampFormat>yyyy-MM-dd'T'HH:mm:ss</timestampFormat>
-                        </configuration>
                     </plugin>
                 </plugins>
             </build>
