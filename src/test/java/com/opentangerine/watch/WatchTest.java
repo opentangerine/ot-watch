@@ -30,7 +30,7 @@ public class WatchTest  {
     public TemporaryFolder folder = new TemporaryFolder();
 
     @Test
-    public void whenChangeAppearsTrigger() throws IOException, InterruptedException {
+    public void notifiesOnFileContentChange() throws IOException, InterruptedException {
         File temp = folder.newFolder();
         Path file = temp.toPath().resolve("text.txt");
         CountDownLatch done = new CountDownLatch(1);
@@ -45,12 +45,59 @@ public class WatchTest  {
             assertThat("Change not spotted withing the timeframe", false);
         }
         watch.close();
+    }
 
+    @Test
+    public void notifiesOnDirectoryRecreation() throws IOException, InterruptedException {
+        File temp = folder.newFolder();
+        Path file = temp.toPath().resolve("text.txt");
+        CountDownLatch done = new CountDownLatch(1);
+        FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
+        Watch watch = new Watch.Default(temp, e -> {
+            assertThat(e.filename(), equalTo("text.txt"));
+            done.countDown();
+        });
+        watch.run();
+        FileUtils.cleanDirectory(temp);
+        FileUtils.deleteDirectory(temp);
+        TimeUnit.MILLISECONDS.sleep(500);
+        FileUtils.forceMkdir(temp);
+        FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
+        if(!done.await(1, TimeUnit.SECONDS)) {
+            assertThat("Change not spotted withing the timeframe", false);
+        }
+        watch.close();
+    }
+
+    @Test
+    public void notifiesEvenIfRegisterBeforeDirectoryCreation() throws IOException, InterruptedException {
+        CountDownLatch done = new CountDownLatch(1);
+        CountDownLatch registered = new CountDownLatch(1);
+        File temp = folder.newFolder();
+        final Path content = temp.toPath().resolve("content");
+        Watch watch = new Watch.Default(content.toFile(), e -> {
+            assertThat(e.filename(), equalTo("text.txt"));
+            done.countDown();
+        }, () -> {
+            registered.countDown();
+        });
+        watch.run();
+        FileUtils.forceMkdir(content.toFile());
+        Path file = temp.toPath().resolve("content/text.txt");
+        if(!registered.await(1, TimeUnit.SECONDS)) {
+            assertThat("Cannot register watch on the specific directory", false);
+        }
+        FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
+        if(!done.await(1, TimeUnit.SECONDS)) {
+            assertThat("Change not spotted withing the timeframe", false);
+        }
+        watch.close();
     }
 
     // Bomb bomb = new Watch(dir, Watch.FILTER, new Delayed(1 sec, 1 sec, 5 sec)).listen(() => {})
     // bomb.destroy();
 
+    // FIXME GG: in progress, even when directory doesn't exists
     // FIXME GG: in progress, still watching after directory recreation
     // FIXME GG: in progress, register that new file was added
     // FIXME GG: in progress, register that file was edited in new directory
@@ -60,4 +107,7 @@ public class WatchTest  {
     // FIXME GG: in progress, listen wait certain period before notification (when multiple changes are happening)
     // FIXME GG: in progress, do not trigger more often than X seconds
     // FIXME GG: in progress, get rid of all FIXMEs
+    // FIXME GG: in progress, create documentation
+    // FIXME GG: in progress, 100% CC
+    // FIXME GG: in progress, static analysis
 }
