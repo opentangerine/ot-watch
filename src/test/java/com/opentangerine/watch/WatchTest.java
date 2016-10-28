@@ -29,6 +29,15 @@ public class WatchTest  {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
+    /**
+     * <code>
+     *     Below you can see test case.
+     *
+     *     Second line.
+     * </code>
+     * @throws IOException If test fails.
+     * @throws InterruptedException If test fails.
+     */
     @Test
     public void notifiesOnFileContentChange() throws IOException, InterruptedException {
         File temp = folder.newFolder();
@@ -47,6 +56,13 @@ public class WatchTest  {
         watch.close();
     }
 
+    /**
+     * <code>
+     *     Even if directory deleted and created again, it's still listening.
+     * </code>
+     * @throws IOException
+     * @throws InterruptedException
+     */
     @Test
     public void notifiesOnDirectoryRecreation() throws IOException, InterruptedException {
         File temp = folder.newFolder();
