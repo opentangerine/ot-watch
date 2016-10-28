@@ -41,7 +41,7 @@ public class Doclet {
                     String c = n.getComment().getContent();
                     String code = StringUtils.substringBetween(c, "<code>", "</code>");
                     code = StringUtils.replace(code, "*", "").replaceAll("\\s{2,}", " ").trim();
-                    readme += code + "\n\n```\n" + n.getBody().toString() + "```\n\n";
+                    readme += code + "\n\n```java\n" + n.getBody().toString() + "\n```\n\n";
                 }
                 super.visit(n, arg);
             }
