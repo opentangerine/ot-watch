@@ -43,6 +43,8 @@ public class Doclet {
                     code = StringUtils.replace(code, "*", "").replaceAll("\\s{2,}", " ").trim();
                     readme += code + "\n\n```java\n" + n.getBody().toString() + "\n```\n\n";
                 }
+                // FIXME GG: in progress, add footer how this was generated
+                // FIXME GG: in progress, add as maven dependency
                 super.visit(n, arg);
             }
 
