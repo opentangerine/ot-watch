@@ -6,24 +6,30 @@
 
 ## Documentation
 
-Below you can see test case. Second line.
+In order to start watching for the changes you have to create `new Watch.Default` instance.
 
 ```java
 {
-    File temp = folder.newFolder();
-    Path file = temp.toPath().resolve("text.txt");
-    CountDownLatch done = new CountDownLatch(1);
-    FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
-    Watch watch = new Watch.Default(temp,  e -> {
-        assertThat(e.filename(), equalTo("text.txt"));
+    // Create sample directory
+    final File directory = folder.newFolder();
+    // Create sample file
+    final Path file = createSampleFile(directory);
+    // Create counter in order to watch change in different thread
+    final CountDownLatch done = new CountDownLatch(1);
+    // watcher in the try-resource clause.
+    try (Watch ignored = new Watch.Default(// Path we're monitoring
+    directory, // Callback executed for each file change
+     change -> {
+        assertThat(change.filename(), equalTo(SAMPLE_FILENAME));
         done.countDown();
-    });
-    watch.start().await();
-    FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
-    if (!done.await(1, TimeUnit.SECONDS)) {
-        assertThat("Change not spotted withing the timeframe", false);
+    }).start().await()) {
+        // Change sample file
+        changeFile(file);
+        // Confirm that change was intercepted done
+        if (!done.await(1, TimeUnit.SECONDS)) {
+            assertThat("Change not spotted within the timeframe", false);
+        }
     }
-    watch.close();
 }
 ```
 
@@ -31,20 +37,37 @@ Even if directory deleted and created again, it's still listening.
 
 ```java
 {
-    File temp = folder.newFolder();
-    Path file = temp.toPath().resolve("text.txt");
-    CountDownLatch done = new CountDownLatch(1);
-    FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
-    Watch watch = new Watch.Default(temp,  e -> {
-        assertThat(e.filename(), equalTo("text.txt"));
+    final File directory = folder.newFolder();
+    final Path file = createSampleFile(directory);
+    final CountDownLatch done = new CountDownLatch(1);
+    Watch watch = new Watch.Default(directory,  e -> {
+        assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
+        done.countDown();
+    }).start().await();
+    recreate(file);
+    if (!done.await(1, TimeUnit.SECONDS)) {
+        assertThat("Change not spotted withing the timeframe", false);
+    }
+    watch.close();
+}
+```
+
+If directory doesn't exists, it is going to be registered as soon as it is going to be created. Therefore we can listen for Paths which are going to be created in near future.
+
+```java
+{
+    final CountDownLatch done = new CountDownLatch(1);
+    final File temp = folder.newFolder();
+    final Path content = temp.toPath().resolve("content");
+    Watch watch = new Watch.Default(content.toFile(),  e -> {
+        assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
         done.countDown();
     });
-    watch.start().await();
-    FileUtils.cleanDirectory(temp);
-    FileUtils.deleteDirectory(temp);
-    TimeUnit.MILLISECONDS.sleep(500);
-    FileUtils.forceMkdir(temp);
-    FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
+    watch.start();
+    FileUtils.forceMkdir(content.toFile());
+    Path file = temp.toPath().resolve("content").resolve(SAMPLE_FILENAME);
+    watch.await();
+    changeFile(file);
     if (!done.await(1, TimeUnit.SECONDS)) {
         assertThat("Change not spotted withing the timeframe", false);
     }

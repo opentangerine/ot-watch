@@ -18,16 +18,9 @@ package com.opentangerine.watch;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
-
-import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 
 /**
  * Each of the method is returning Watch object so it's easy to do
@@ -47,6 +40,7 @@ public interface Watch extends Closeable {
         private Consumer<Change> supplier;
         private boolean running = false;
         private CountDownLatch latch = new CountDownLatch(1);
+        private CountDownLatch closed = new CountDownLatch(1);
 
         public Default(File dir, Consumer<Change> onChange) {
             this.dir = dir;
@@ -62,12 +56,13 @@ public interface Watch extends Closeable {
                 running = true;
             }
             new Thread(() -> {
-                Service s = new Service();
+                Eye s = new Eye();
                 s.registerAll(dir.toPath());
                 latch.countDown();
                 while (running) {
                     s.accept(supplier);
                 }
+                closed.countDown();
             }).start();
             return this;
         }
@@ -87,50 +82,12 @@ public interface Watch extends Closeable {
         @Override
         public void close() throws IOException {
             running = false;
-        }
-    }
-}
-
-class Service {
-    private WatchService watcher;
-
-    /**
-     * Register the given directory, and all its sub-directories, with the WatchService.
-     */
-    void registerAll(final Path start) {
-        // register directory and sub-directories
-        try {
-            watcher = FileSystems.getDefault().newWatchService();
-            while(!start.toFile().exists()) {
-                // wait
-                try {
-                    TimeUnit.SECONDS.sleep(1L);
-                } catch (InterruptedException e1) {
-                    throw new IllegalStateException("Interrupted", e1);
-                }
+            try {
+                closed.await(1L, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                throw new IllegalStateException("Unable to close listener.", e);
             }
-            Files.walkFileTree(start, new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir1, BasicFileAttributes attrs)
-                        throws IOException {
-                    dir1.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-
-    void accept(Consumer<Change> supplier) {
-        try {
-            final WatchKey wk = this.watcher.take();
-            wk.pollEvents().stream()
-                    .map(Change.Simple::new)
-                    .forEach(it -> supplier.accept(it));
-        } catch (Exception ex) {
-            throw new IllegalStateException("Unable to read monitoring events", ex);
         }
     }
 }
+
