@@ -18,7 +18,7 @@ Below you can see test case. Second line.
         assertThat(e.filename(), equalTo("text.txt"));
         done.countDown();
     });
-    watch.run();
+    watch.start().await();
     FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
     if (!done.await(1, TimeUnit.SECONDS)) {
         assertThat("Change not spotted withing the timeframe", false);
@@ -39,7 +39,7 @@ Even if directory deleted and created again, it's still listening.
         assertThat(e.filename(), equalTo("text.txt"));
         done.countDown();
     });
-    watch.run();
+    watch.start().await();
     FileUtils.cleanDirectory(temp);
     FileUtils.deleteDirectory(temp);
     TimeUnit.MILLISECONDS.sleep(500);
