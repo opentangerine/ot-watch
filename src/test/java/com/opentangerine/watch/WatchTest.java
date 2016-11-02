@@ -25,7 +25,7 @@ import static org.hamcrest.Matchers.*;
 /**
  * @author Grzegorz Gajos
  */
-public class WatchTest  {
+public class WatchTest {
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
@@ -48,7 +48,7 @@ public class WatchTest  {
             assertThat(e.filename(), equalTo("text.txt"));
             done.countDown();
         });
-        watch.run();
+        watch.start().await();
         FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
         if(!done.await(1, TimeUnit.SECONDS)) {
             assertThat("Change not spotted withing the timeframe", false);
@@ -73,7 +73,7 @@ public class WatchTest  {
             assertThat(e.filename(), equalTo("text.txt"));
             done.countDown();
         });
-        watch.run();
+        watch.start().await();
         FileUtils.cleanDirectory(temp);
         FileUtils.deleteDirectory(temp);
         TimeUnit.MILLISECONDS.sleep(500);
@@ -88,21 +88,16 @@ public class WatchTest  {
     @Test
     public void notifiesEvenIfRegisterBeforeDirectoryCreation() throws IOException, InterruptedException {
         CountDownLatch done = new CountDownLatch(1);
-        CountDownLatch registered = new CountDownLatch(1);
         File temp = folder.newFolder();
         final Path content = temp.toPath().resolve("content");
         Watch watch = new Watch.Default(content.toFile(), e -> {
             assertThat(e.filename(), equalTo("text.txt"));
             done.countDown();
-        }, () -> {
-            registered.countDown();
         });
-        watch.run();
+        watch.start();
         FileUtils.forceMkdir(content.toFile());
         Path file = temp.toPath().resolve("content/text.txt");
-        if(!registered.await(1, TimeUnit.SECONDS)) {
-            assertThat("Cannot register watch on the specific directory", false);
-        }
+        watch.await();
         FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
         if(!done.await(1, TimeUnit.SECONDS)) {
             assertThat("Change not spotted withing the timeframe", false);
