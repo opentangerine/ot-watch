@@ -30,11 +30,11 @@ public class WatchTest  {
     public TemporaryFolder folder = new TemporaryFolder();
 
     /**
-     * <code>
+     * <readme>
      *     Below you can see test case.
      *
      *     Second line.
-     * </code>
+     * </readme>
      * @throws IOException If test fails.
      * @throws InterruptedException If test fails.
      */
@@ -57,9 +57,9 @@ public class WatchTest  {
     }
 
     /**
-     * <code>
+     * <readme>
      *     Even if directory deleted and created again, it's still listening.
-     * </code>
+     * </readme>
      * @throws IOException
      * @throws InterruptedException
      */
@@ -113,7 +113,7 @@ public class WatchTest  {
     // Bomb bomb = new Watch(dir, Watch.FILTER, new Delayed(1 sec, 1 sec, 5 sec)).listen(() => {})
     // bomb.destroy();
 
-    // FIXME GG: in progress, even when directory doesn't exists
+    // FIXME GG: in progress, Watch, even if directory doesn't exists.
     // FIXME GG: in progress, still watching after directory recreation
     // FIXME GG: in progress, register that new file was added
     // FIXME GG: in progress, register that file was edited in new directory
