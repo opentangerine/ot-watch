@@ -1,59 +1,81 @@
+/**
+ * Copyright (c) since 2012, Open Tangerine (http://opentangerine.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.opentangerine.watch;
 
+import org.jooq.lambda.Unchecked;
+
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.concurrent.TimeUnit;
+import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * @author Grzegorz Gajos
+ * Facade around {@link WatchService}.
+ *
+ * @author Grzegorz Gajos (grzegorz.gajos@opentangerine.com)
+ * @version $Id$
+ * @since 1.0
  */
-class Eye {
+class Eye implements Closeable {
+    /**
+     * Native service instance.
+     */
     private WatchService watcher;
 
     /**
-     * Register the given directory, and all its sub-directories, with the WatchService.
+     * Register the given directory, and all its sub-directories with the
+     * {@link WatchService}.
      */
     void registerAll(final Path start) {
-        // register directory and sub-directories
-        try {
+        Unchecked.runnable(() -> {
             watcher = FileSystems.getDefault().newWatchService();
-            while(!start.toFile().exists()) {
-                // wait
-                try {
-                    TimeUnit.SECONDS.sleep(1L);
-                } catch (InterruptedException e1) {
-                    throw new IllegalStateException("Interrupted", e1);
-                }
-            }
+            Await.on(() -> start.toFile().exists());
             Files.walkFileTree(start, new SimpleFileVisitor<Path>() {
                 @Override
-                public FileVisitResult preVisitDirectory(Path dir1, BasicFileAttributes attrs)
+                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs)
                         throws IOException {
-                    dir1.register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+                    directory.register(
+                            watcher,
+                            StandardWatchEventKinds.ENTRY_CREATE,
+                            StandardWatchEventKinds.ENTRY_DELETE,
+                            StandardWatchEventKinds.ENTRY_MODIFY
+                    );
                     return FileVisitResult.CONTINUE;
                 }
             });
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        }).run();
     }
 
-
+    /**
+     * Poll events from the watcher service and return stream of
+     * new events (if any).
+     *
+     * @return Simple changes stream.
+     */
     Stream<Change.Simple> accept() {
-        try {
-            final WatchKey wk = this.watcher.poll(1L, TimeUnit.SECONDS);
-            if(wk != null) {
-                System.out.println(4);
-                return wk.pollEvents().stream()
-                        .map(Change.Simple::new);
-            } else {
+        return Optional.ofNullable(Unchecked.supplier(() -> this.watcher.poll(Await.MOMENT, Await.UNIT)).get())
+                .map(wk -> wk.pollEvents().stream().map(Change.Simple::new))
+                .orElse(Stream.empty());
+    }
 
-            }
-        } catch (Exception ex) {
-            throw new IllegalStateException("Unable to read monitoring events", ex);
-        }
-        return Stream.empty();
+    @Override
+    public void close() throws IOException {
+        this.watcher.close();
     }
 }
+

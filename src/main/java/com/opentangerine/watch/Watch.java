@@ -15,18 +15,20 @@
  */
 package com.opentangerine.watch;
 
+import org.jooq.lambda.Unchecked;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
  * Each of the method is returning Watch object so it's easy to do
  * chain.
  *
- * @author Grzegorz Gajos
+ * @author Grzegorz Gajos (grzegorz.gajos@opentangerine.com)
+ * @version $Id$
+ * @since 1.0
  */
 // FIXME GG: in progress, extract interface
 public interface Watch extends Closeable {
@@ -36,64 +38,50 @@ public interface Watch extends Closeable {
     Watch onChange(Consumer<Change> supplier);
 
     final class Native implements Watch {
-        private final File dir;
-        // FIXME GG: in progress, create proper interfaces for the standard i. add @FunctionalInterface
         private Consumer<Change> supplier = change -> {};
         private boolean running = false;
-        private CountDownLatch latch = new CountDownLatch(1);
-        private CountDownLatch closed = new CountDownLatch(1);
+        private Latch registration = new Latch();
+        private Latch disposed = new Latch();
+        private final Thread thread;
 
         public Native(File dir) {
-            this.dir = dir;
+            this.thread = new Thread(
+                Unchecked.runnable(() -> {
+                    try (Eye eye = new Eye()) {
+                        eye.registerAll(dir.toPath());
+                        registration.done();
+                        while (running) {
+                            eye.accept().forEach(it -> this.supplier.accept(it));
+                        }
+                    }
+                    disposed.done();
+                })
+            );
         }
 
         @Override
         public Watch start() {
-            synchronized (this) {
-                if (running) {
-                    throw new IllegalStateException("You cannot start watcher multiple times.");
-                }
-                running = true;
-            }
-            new Thread(() -> {
-                Eye eye = new Eye();
-                eye.registerAll(dir.toPath());
-                latch.countDown();
-                while (running) {
-                    eye.accept().forEach(it -> this.supplier.accept(it));
-                }
-                closed.countDown();
-            }).start();
+            thread.start();
+            this.running = true;
             return this;
         }
 
         @Override
         public Watch await() {
-            try {
-                if (!latch.await(3, TimeUnit.SECONDS)) {
-                    throw new IllegalStateException("Unable to register messages.");
-                }
-            } catch (InterruptedException e) {
-                throw new IllegalStateException("Unable to register event service.", e);
-            }
+            registration.await();
             return this;
         }
 
         @Override
         public Watch onChange(Consumer<Change> supplier) {
-            // FIXME GG: in progress,
-            this.supplier = supplier;
+            this.supplier = supplier.andThen(supplier);
             return this;
         }
 
         @Override
         public void close() throws IOException {
             running = false;
-            try {
-                closed.await(1L, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                throw new IllegalStateException("Unable to close listener.", e);
-            }
+            Unchecked.runnable(this.thread::join).run();
         }
     }
 }

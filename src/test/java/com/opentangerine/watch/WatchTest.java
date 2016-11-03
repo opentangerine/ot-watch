@@ -1,12 +1,12 @@
 /**
  * Copyright (c) since 2012, Open Tangerine (http://opentangerine.com)
- * <p>
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * <p>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -148,8 +148,14 @@ public class WatchTest {
         final File directory = file.getParent().toFile();
         FileUtils.cleanDirectory(directory);
         FileUtils.deleteDirectory(directory);
-        TimeUnit.MILLISECONDS.sleep(500);
-        FileUtils.forceMkdir(directory);
+        for(int i=0; i<10 || !directory.exists(); i++) {
+            try {
+                TimeUnit.MILLISECONDS.sleep(50);
+                FileUtils.forceMkdir(directory);
+            } catch (Exception ex) {
+                // Let's try again
+            }
+        }
         changeFile(file);
     }
 
@@ -167,4 +173,5 @@ public class WatchTest {
     // FIXME GG: in progress, create documentation
     // FIXME GG: in progress, 100% CC
     // FIXME GG: in progress, static analysis
+    // FIXME GG: in progress, test exception on double start
 }
