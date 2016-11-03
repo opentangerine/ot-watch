@@ -49,33 +49,18 @@ public class WatchTest {
      */
     @Test
     public void notifiesOnFileContentChange() throws Exception {
-        // Create sample directory
         final File directory = folder.newFolder();
-        // Create sample file
         final Path file = createSampleFile(directory);
-        // Create counter in order to watch change in different thread
         final CountDownLatch done = new CountDownLatch(1);
-        // In order to correctly close resources we're going to open
-        // watcher in the try-resource clause.
-        try (
-                Watch ignored = new Watch.Default(
-                        // Path we're monitoring
-                        directory,
-                        // Callback executed for each file change
-                        change -> {
-                            assertThat(change.filename(), equalTo(SAMPLE_FILENAME));
-                            done.countDown();
-                        }
-                )
-                        // Start listening for the changes
-                        .start()
-                        // Wait till all services are registered properly
-                        .await()
-        ) {
-            // Change sample file
+        try (Watch watch = new Watch.Native(directory)) {
+            watch.start().await().onChange(
+                    change -> {
+                        assertThat(change.filename(), equalTo(SAMPLE_FILENAME));
+                        done.countDown();
+                    }
+            );
             changeFile(file);
-            // Confirm that change was intercepted done
-            if (!done.await(1, TimeUnit.SECONDS)) {
+            if (!done.await(3, TimeUnit.SECONDS)) {
                 assertThat("Change not spotted within the timeframe", false);
             }
         }
@@ -92,15 +77,16 @@ public class WatchTest {
         final File directory = folder.newFolder();
         final Path file = createSampleFile(directory);
         final CountDownLatch done = new CountDownLatch(1);
-        Watch watch = new Watch.Default(directory, e -> {
-            assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
-            done.countDown();
-        }).start().await();
-        recreate(file);
-        if (!done.await(1, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted withing the timeframe", false);
+        try (Watch watch = new Watch.Native(directory)) {
+            watch.start().await().onChange(e -> {
+                assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
+                done.countDown();
+            });
+            recreate(file);
+            if (!done.await(1, TimeUnit.SECONDS)) {
+                assertThat("Change not spotted withing the timeframe", false);
+            }
         }
-        watch.close();
     }
 
     /**
@@ -116,19 +102,19 @@ public class WatchTest {
         final CountDownLatch done = new CountDownLatch(1);
         final File temp = folder.newFolder();
         final Path content = temp.toPath().resolve("content");
-        Watch watch = new Watch.Default(content.toFile(), e -> {
-            assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
-            done.countDown();
-        });
-        watch.start();
-        FileUtils.forceMkdir(content.toFile());
-        Path file = temp.toPath().resolve("content").resolve(SAMPLE_FILENAME);
-        watch.await();
-        changeFile(file);
-        if (!done.await(1, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted withing the timeframe", false);
+        try (Watch watch = new Watch.Native(content.toFile())) {
+            watch.start().onChange(e -> {
+                assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
+                done.countDown();
+            });
+            FileUtils.forceMkdir(content.toFile());
+            Path file = temp.toPath().resolve("content").resolve(SAMPLE_FILENAME);
+            watch.await();
+            changeFile(file);
+            if (!done.await(1, TimeUnit.SECONDS)) {
+                assertThat("Change not spotted withing the timeframe", false);
+            }
         }
-        watch.close();
     }
 
     /**
@@ -167,6 +153,7 @@ public class WatchTest {
         changeFile(file);
     }
 
+    // FIXME GG: in progress, add Objects.require etc.
     // FIXME GG: in progress, Watch, even if directory doesn't exists.
     // FIXME GG: in progress, still watching after directory recreation
     // FIXME GG: in progress, register that new file was added

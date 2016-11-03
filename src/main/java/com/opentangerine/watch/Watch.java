@@ -33,18 +33,18 @@ public interface Watch extends Closeable {
 
     Watch start();
     Watch await();
+    Watch onChange(Consumer<Change> supplier);
 
-    final class Default implements Watch {
+    final class Native implements Watch {
         private final File dir;
         // FIXME GG: in progress, create proper interfaces for the standard i. add @FunctionalInterface
-        private Consumer<Change> supplier;
+        private Consumer<Change> supplier = change -> {};
         private boolean running = false;
         private CountDownLatch latch = new CountDownLatch(1);
         private CountDownLatch closed = new CountDownLatch(1);
 
-        public Default(File dir, Consumer<Change> onChange) {
+        public Native(File dir) {
             this.dir = dir;
-            this.supplier = onChange;
         }
 
         @Override
@@ -56,11 +56,11 @@ public interface Watch extends Closeable {
                 running = true;
             }
             new Thread(() -> {
-                Eye s = new Eye();
-                s.registerAll(dir.toPath());
+                Eye eye = new Eye();
+                eye.registerAll(dir.toPath());
                 latch.countDown();
                 while (running) {
-                    s.accept(supplier);
+                    eye.accept().forEach(it -> this.supplier.accept(it));
                 }
                 closed.countDown();
             }).start();
@@ -76,6 +76,13 @@ public interface Watch extends Closeable {
             } catch (InterruptedException e) {
                 throw new IllegalStateException("Unable to register event service.", e);
             }
+            return this;
+        }
+
+        @Override
+        public Watch onChange(Consumer<Change> supplier) {
+            // FIXME GG: in progress,
+            this.supplier = supplier;
             return this;
         }
 

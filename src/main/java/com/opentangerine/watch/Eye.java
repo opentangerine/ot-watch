@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * @author Grzegorz Gajos
@@ -41,14 +41,19 @@ class Eye {
     }
 
 
-    void accept(Consumer<Change> supplier) {
+    Stream<Change.Simple> accept() {
         try {
             final WatchKey wk = this.watcher.poll(1L, TimeUnit.SECONDS);
-            wk.pollEvents().stream()
-                    .map(Change.Simple::new)
-                    .forEach(it -> supplier.accept(it));
+            if(wk != null) {
+                System.out.println(4);
+                return wk.pollEvents().stream()
+                        .map(Change.Simple::new);
+            } else {
+
+            }
         } catch (Exception ex) {
             throw new IllegalStateException("Unable to read monitoring events", ex);
         }
+        return Stream.empty();
     }
 }
