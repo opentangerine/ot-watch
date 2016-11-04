@@ -13,34 +13,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.opentangerine.watch;
+package com.opentangerine.watch.internal;
 
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import org.jooq.lambda.Unchecked;
 
 /**
+ * Helper methods to simplify waiting operations.
+ *
  * @author Grzegorz Gajos (grzegorz.gajos@opentangerine.com)
  * @version $Id$
  * @since 1.0
  */
 public interface Await {
-
+    /**
+     * Default amount of milliseconds for the 'moment'.
+     */
     long MOMENT = 250L;
+    /**
+     * Default unit of waiting.
+     */
     TimeUnit UNIT = TimeUnit.MILLISECONDS;
 
-    static void on(Supplier<Boolean> consumer) {
-        while(!consumer.get()) {
+    /**
+     * Block the current thread while condition is true.
+     * @param condition Condition.
+     */
+    static void whileTrue(Supplier<Boolean> condition) {
+        while (condition.get()) {
             Await.moment();
         }
     }
 
+    /**
+     * Block current thread using default amount of time.
+     */
     static void moment() {
-        try {
-            UNIT.sleep(MOMENT);
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted", interrupted);
-        }
+        Unchecked.runnable(() -> UNIT.sleep(MOMENT)).run();
     }
-
 }

@@ -25,7 +25,6 @@ import java.nio.file.WatchEvent;
  * @since 1.0
  */
 public interface Change {
-
     /**
      * Filename.
      * @return Name of the file that changed.
@@ -54,6 +53,5 @@ public interface Change {
         public String filename() {
             return this.source.context().toString();
         }
-
     }
 }

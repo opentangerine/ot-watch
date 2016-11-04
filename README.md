@@ -6,15 +6,15 @@
 
 ## Documentation
 
-In order to start watching for the changes you have to create `new Watch.Default` instance.
+Basic example how to use Watch.Native.
 
 ```java
 {
     final File directory = folder.newFolder();
     final Path file = createSampleFile(directory);
     final CountDownLatch done = new CountDownLatch(1);
-    try (Watch watch = new Watch.Native(directory)) {
-        watch.start().await().onChange( change -> {
+    try (Watch watch = new Native(directory.toPath())) {
+        watch.start().await().listen( change -> {
             assertThat(change.filename(), equalTo(SAMPLE_FILENAME));
             done.countDown();
         });
@@ -33,8 +33,8 @@ Even if directory deleted and created again, it's still listening.
     final File directory = folder.newFolder();
     final Path file = createSampleFile(directory);
     final CountDownLatch done = new CountDownLatch(1);
-    try (Watch watch = new Watch.Native(directory)) {
-        watch.start().await().onChange( e -> {
+    try (Watch watch = new Native(directory.toPath())) {
+        watch.start().await().listen( e -> {
             assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
             done.countDown();
         });
@@ -53,8 +53,8 @@ If directory doesn't exists, it is going to be registered as soon as it is going
     final CountDownLatch done = new CountDownLatch(1);
     final File temp = folder.newFolder();
     final Path content = temp.toPath().resolve("content");
-    try (Watch watch = new Watch.Native(content.toFile())) {
-        watch.start().onChange( e -> {
+    try (Watch watch = new Native(content)) {
+        watch.start().listen( e -> {
             assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
             done.countDown();
         });

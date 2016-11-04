@@ -15,6 +15,7 @@
  */
 package com.opentangerine.watch;
 
+import com.opentangerine.watch.internal.Native;
 import org.apache.commons.io.FileUtils;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,8 +43,7 @@ public class WatchTest {
 
     /**
      * <readme>
-     *     In order to start watching for the changes you have to
-     *     create `new Watch.Default` instance.
+     *     Basic example how to use Watch.Native.
      * </readme>
      * @throws Exception If test fails.
      */
@@ -52,8 +52,8 @@ public class WatchTest {
         final File directory = folder.newFolder();
         final Path file = createSampleFile(directory);
         final CountDownLatch done = new CountDownLatch(1);
-        try (Watch watch = new Watch.Native(directory)) {
-            watch.start().await().onChange(
+        try (Watch watch = new Native(directory.toPath())) {
+            watch.start().await().listen(
                     change -> {
                         assertThat(change.filename(), equalTo(SAMPLE_FILENAME));
                         done.countDown();
@@ -77,8 +77,8 @@ public class WatchTest {
         final File directory = folder.newFolder();
         final Path file = createSampleFile(directory);
         final CountDownLatch done = new CountDownLatch(1);
-        try (Watch watch = new Watch.Native(directory)) {
-            watch.start().await().onChange(e -> {
+        try (Watch watch = new Native(directory.toPath())) {
+            watch.start().await().listen(e -> {
                 assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
                 done.countDown();
             });
@@ -102,8 +102,8 @@ public class WatchTest {
         final CountDownLatch done = new CountDownLatch(1);
         final File temp = folder.newFolder();
         final Path content = temp.toPath().resolve("content");
-        try (Watch watch = new Watch.Native(content.toFile())) {
-            watch.start().onChange(e -> {
+        try (Watch watch = new Native(content)) {
+            watch.start().listen(e -> {
                 assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
                 done.countDown();
             });
