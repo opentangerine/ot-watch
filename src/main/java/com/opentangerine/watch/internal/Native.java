@@ -35,13 +35,9 @@ public final class Native implements Watch {
      */
     private final Latch registration;
     /**
-     * Directory to watch.
-     */
-    private final Path dir;
-    /**
      * Background thread for watching purposes.
      */
-    private Thread thread;
+    private final Thread thread;
     /**
      * Notification function.
      */
@@ -53,22 +49,18 @@ public final class Native implements Watch {
 
     /**
      * Ctor.
-     * @param cdir Directory to watch.
+     * @param dir Directory to watch.
      */
-    public Native(final Path cdir) {
+    @SuppressWarnings("PMD.ConstructorOnlyInitializesOrCallOtherConstructors")
+    public Native(final Path dir) {
+        final Latch disposed = new Latch();
         this.registration = new Latch();
         this.notify = it -> { };
-        this.dir = cdir;
-    }
-
-    @Override
-    public Watch start() {
-        final Latch disposed = new Latch();
         this.thread = new Thread(
             Unchecked.runnable(
                 () -> {
                     try (Eye eye = new Eye()) {
-                        eye.register(this.dir);
+                        eye.register(dir);
                         this.registration.done();
                         while (this.running) {
                             eye.accept().forEach(it -> this.notify.accept(it));
@@ -78,6 +70,10 @@ public final class Native implements Watch {
                 }
             )
         );
+    }
+
+    @Override
+    public Watch start() {
         this.thread.start();
         this.running = true;
         return this;
