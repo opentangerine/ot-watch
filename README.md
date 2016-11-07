@@ -6,24 +6,23 @@
 
 ## Documentation
 
-Below you can see test case. Second line.
+Basic example how to use Watch.Native.
 
 ```java
 {
-    File temp = folder.newFolder();
-    Path file = temp.toPath().resolve("text.txt");
-    CountDownLatch done = new CountDownLatch(1);
-    FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
-    Watch watch = new Watch.Default(temp,  e -> {
-        assertThat(e.filename(), equalTo("text.txt"));
-        done.countDown();
-    });
-    watch.run();
-    FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
-    if (!done.await(1, TimeUnit.SECONDS)) {
-        assertThat("Change not spotted withing the timeframe", false);
+    final File directory = folder.newFolder();
+    final Path file = createSampleFile(directory);
+    final CountDownLatch done = new CountDownLatch(1);
+    try (Watch watch = new Native(directory.toPath())) {
+        watch.start().await().listen( change -> {
+            assertThat(change.filename(), equalTo(SAMPLE_FILENAME));
+            done.countDown();
+        });
+        changeFile(file);
+        if (!done.await(3, TimeUnit.SECONDS)) {
+            assertThat("Change not spotted within the timeframe", false);
+        }
     }
-    watch.close();
 }
 ```
 
@@ -31,24 +30,42 @@ Even if directory deleted and created again, it's still listening.
 
 ```java
 {
-    File temp = folder.newFolder();
-    Path file = temp.toPath().resolve("text.txt");
-    CountDownLatch done = new CountDownLatch(1);
-    FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
-    Watch watch = new Watch.Default(temp,  e -> {
-        assertThat(e.filename(), equalTo("text.txt"));
-        done.countDown();
-    });
-    watch.run();
-    FileUtils.cleanDirectory(temp);
-    FileUtils.deleteDirectory(temp);
-    TimeUnit.MILLISECONDS.sleep(500);
-    FileUtils.forceMkdir(temp);
-    FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
-    if (!done.await(1, TimeUnit.SECONDS)) {
-        assertThat("Change not spotted withing the timeframe", false);
+    final File directory = folder.newFolder();
+    final Path file = createSampleFile(directory);
+    final CountDownLatch done = new CountDownLatch(1);
+    try (Watch watch = new Native(directory.toPath())) {
+        watch.start().await().listen( e -> {
+            assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
+            done.countDown();
+        });
+        recreate(file);
+        if (!done.await(1, TimeUnit.SECONDS)) {
+            assertThat("Change not spotted withing the timeframe", false);
+        }
     }
-    watch.close();
+}
+```
+
+If directory doesn't exists, it is going to be registered as soon as it is going to be created. Therefore we can listen for Paths which are going to be created in near future.
+
+```java
+{
+    final CountDownLatch done = new CountDownLatch(1);
+    final File temp = folder.newFolder();
+    final Path content = temp.toPath().resolve("content");
+    try (Watch watch = new Native(content)) {
+        watch.start().listen( e -> {
+            assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
+            done.countDown();
+        });
+        FileUtils.forceMkdir(content.toFile());
+        Path file = temp.toPath().resolve("content").resolve(SAMPLE_FILENAME);
+        watch.await();
+        changeFile(file);
+        if (!done.await(1, TimeUnit.SECONDS)) {
+            assertThat("Change not spotted withing the timeframe", false);
+        }
+    }
 }
 ```
 

@@ -1,124 +1,194 @@
+/**
+ * Copyright (c) since 2012, Open Tangerine (http://opentangerine.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.opentangerine.watch;
 
-import org.apache.commons.io.FileUtils;
-import org.hamcrest.MatcherAssert;
-import org.hamcrest.Matchers;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runner.notification.RunListener;
-
+import com.opentangerine.watch.internal.Await;
+import com.opentangerine.watch.internal.Latch;
+import com.opentangerine.watch.internal.Native;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.hamcrest.MatcherAssert.*;
-import static org.hamcrest.Matchers.*;
+import java.util.UUID;
+import org.apache.commons.io.FileUtils;
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
+import org.jooq.lambda.Unchecked;
+import org.jooq.lambda.fi.util.function.CheckedConsumer;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
- * @author Grzegorz Gajos
+ * Tests for {@link Watch}.
+ *
+ * @author Grzegorz Gajos (grzegorz.gajos@opentangerine.com)
+ * @version $Id$
+ * @since 1.0
  */
-public class WatchTest {
+public final class WatchTest {
+    /**
+     * Name of the sample file.
+     */
+    private static final String SAMPLE = "sample.file";
+
+    /**
+     * Create temp directory for each test.
+     */
     @Rule
     public TemporaryFolder folder = new TemporaryFolder();
 
     /**
-     * <readme>
-     *     Below you can see test case.
-     *
-     *     Second line.
-     * </readme>
-     * @throws IOException If test fails.
-     * @throws InterruptedException If test fails.
+     * Basic example how to use Watch.Native.
+     * @throws Exception If test fails.
      */
     @Test
-    public void notifiesOnFileContentChange() throws IOException, InterruptedException {
-        File temp = folder.newFolder();
-        Path file = temp.toPath().resolve("text.txt");
-        CountDownLatch done = new CountDownLatch(1);
-        FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
-        Watch watch = new Watch.Default(temp, e -> {
-            assertThat(e.filename(), equalTo("text.txt"));
-            done.countDown();
-        });
-        watch.start().await();
-        FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
-        if(!done.await(1, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted withing the timeframe", false);
-        }
-        watch.close();
+    public void notifiesOnFileContentChange() throws Exception {
+        this.withLatch(
+            changed -> {
+                final File directory = this.folder.newFolder();
+                final Path file = sampleFile(directory);
+                try (Watch watch = new Native(directory.toPath())) {
+                    watch.start().await().listen(
+                        change -> {
+                            MatcherAssert.assertThat(
+                                change.filename(),
+                                Matchers.equalTo(file.toFile().getName())
+                            );
+                            changed.done();
+                        }
+                    );
+                    changeFile(file);
+                }
+            }
+        );
     }
 
     /**
-     * <readme>
-     *     Even if directory deleted and created again, it's still listening.
-     * </readme>
-     * @throws IOException
-     * @throws InterruptedException
+     * Even if directory deleted and created again, it's still listening.
+     * @throws Exception If fails.
      */
     @Test
-    public void notifiesOnDirectoryRecreation() throws IOException, InterruptedException {
-        File temp = folder.newFolder();
-        Path file = temp.toPath().resolve("text.txt");
-        CountDownLatch done = new CountDownLatch(1);
-        FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
-        Watch watch = new Watch.Default(temp, e -> {
-            assertThat(e.filename(), equalTo("text.txt"));
-            done.countDown();
-        });
-        watch.start().await();
-        FileUtils.cleanDirectory(temp);
-        FileUtils.deleteDirectory(temp);
-        TimeUnit.MILLISECONDS.sleep(500);
-        FileUtils.forceMkdir(temp);
-        FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
-        if(!done.await(1, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted withing the timeframe", false);
-        }
-        watch.close();
+    public void notifiesOnDirectoryRecreation() throws Exception {
+        this.withLatch(
+            changed -> {
+                final File directory = this.folder.newFolder();
+                final Path file = sampleFile(directory);
+                try (Watch watch = new Native(directory.toPath())) {
+                    watch.start().await().listen(
+                        change -> {
+                            MatcherAssert.assertThat(
+                                change.filename(),
+                                Matchers.equalTo(file.toFile().getName())
+                            );
+                            changed.done();
+                        }
+                    );
+                    recreate(file);
+                }
+            }
+        );
     }
 
+    /**
+     * If directory doesn't exists, it is going to be registered as soon
+     * as it is going to be created. Therefore we can listen for Paths
+     * which are going to be created in near future.
+     * @throws Exception If fails.
+     */
     @Test
-    public void notifiesEvenIfRegisterBeforeDirectoryCreation() throws IOException, InterruptedException {
-        CountDownLatch done = new CountDownLatch(1);
-        File temp = folder.newFolder();
-        final Path content = temp.toPath().resolve("content");
-        Watch watch = new Watch.Default(content.toFile(), e -> {
-            assertThat(e.filename(), equalTo("text.txt"));
-            done.countDown();
-        });
-        watch.start();
-        FileUtils.forceMkdir(content.toFile());
-        Path file = temp.toPath().resolve("content/text.txt");
-        watch.await();
-        FileUtils.writeStringToFile(file.toFile(), "2", StandardCharsets.UTF_8);
-        if(!done.await(1, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted withing the timeframe", false);
-        }
-        watch.close();
+    public void notifiesEvenIfRegisterBeforeDirCreation() throws Exception {
+        this.withLatch(
+            changed -> {
+                final File temp = this.folder.newFolder();
+                final String dir = "content";
+                final Path content = temp.toPath().resolve(dir);
+                try (Watch watch = new Native(content)) {
+                    watch.start().listen(
+                        change -> {
+                            MatcherAssert.assertThat(
+                                change.filename(),
+                                Matchers.equalTo(WatchTest.SAMPLE)
+                            );
+                            changed.done();
+                        }
+                    );
+                    FileUtils.forceMkdir(content.toFile());
+                    final Path file = temp.toPath()
+                        .resolve(dir).resolve(WatchTest.SAMPLE);
+                    watch.await();
+                    changeFile(file);
+                }
+            }
+        );
     }
 
-    // Bomb bomb = new Watch(dir, Watch.FILTER, new Delayed(1 sec, 1 sec, 5 sec)).listen(() => {})
-    // bomb.destroy();
+    /**
+     * Run the consumer and wait for the latch to be completed.
+     *
+     * @param consumer Function that should mark the latch as done.
+     */
+    private static void withLatch(final CheckedConsumer<Latch> consumer) {
+        final Latch done = new Latch();
+        Unchecked.consumer(consumer).accept(done);
+        done.await();
+    }
 
-    // FIXME GG: in progress, Watch, even if directory doesn't exists.
-    // FIXME GG: in progress, still watching after directory recreation
-    // FIXME GG: in progress, register that new file was added
-    // FIXME GG: in progress, register that file was edited in new directory
-    // FIXME GG: in progress, register that file was deleted along with the different directory
-    // FIXME GG: in progress, listen only to the specific filter (lambda)
-    // FIXME GG: in progress, listen only to the specific file extensions
-    // FIXME GG: in progress, listen wait certain period before notification (when multiple changes are happening)
-    // FIXME GG: in progress, do not trigger more often than X seconds
-    // FIXME GG: in progress, get rid of all FIXMEs
-    // FIXME GG: in progress, create documentation
-    // FIXME GG: in progress, 100% CC
-    // FIXME GG: in progress, static analysis
+    /**
+     * Change content of the file.
+     * @param file File that should be changed.
+     * @throws IOException If fails.
+     */
+    private static void changeFile(final Path file) throws IOException {
+        FileUtils.writeStringToFile(
+            file.toFile(),
+            UUID.randomUUID().toString(),
+            StandardCharsets.UTF_8
+        );
+    }
+
+    /**
+     * Create sample file.
+     * @param directory Directory where sample file should be created.
+     * @return Path of newly created file.
+     * @throws IOException If fails.
+     */
+    private static Path sampleFile(final File directory) throws IOException {
+        final Path file = directory.toPath().resolve(WatchTest.SAMPLE);
+        FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
+        return file;
+    }
+
+    /**
+     * Delete directory along the file and then recreate. We have to sleep
+     * between recreations as system doesn't allow to immediately recreate
+     * files.
+     * @param file Sample file.
+     * @throws Exception If fails.
+     */
+    private static void recreate(final Path file) throws Exception {
+        final File dir = file.getParent().toFile();
+        FileUtils.cleanDirectory(dir);
+        FileUtils.deleteDirectory(dir);
+        final int retries = 10;
+        for (int retry = 0; retry < retries || !dir.exists(); retry += 1) {
+            Await.moment();
+            FileUtils.forceMkdir(dir);
+        }
+        changeFile(file);
+    }
+
 }
