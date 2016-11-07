@@ -26,6 +26,7 @@ import org.jooq.lambda.Unchecked;
  * @version $Id$
  * @since 1.0
  */
+@SuppressWarnings("PMD.ProhibitPublicStaticMethods")
 public interface Await {
     /**
      * Default amount of milliseconds for the 'moment'.
@@ -50,6 +51,6 @@ public interface Await {
      * Block current thread using default amount of time.
      */
     static void moment() {
-        Unchecked.runnable(() -> UNIT.sleep(MOMENT)).run();
+        Unchecked.runnable(() -> Await.UNIT.sleep(Await.MOMENT)).run();
     }
 }

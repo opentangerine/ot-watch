@@ -35,22 +35,22 @@ public final class Latch {
     /**
      * Internal latch.
      */
-    private CountDownLatch internal = new CountDownLatch(1);
+    private final CountDownLatch internal = new CountDownLatch(1);
 
     /**
      * Mark internal latch as done.
      */
-    void done() {
+    public void done() {
         this.internal.countDown();
     }
 
     /**
      * Await default amount of time or throw Timeout exception.
      */
-    void await() {
+    public void await() {
         Unchecked.runnable(
             () -> {
-                if (!this.internal.await(DEFAULT, TimeUnit.SECONDS)) {
+                if (!this.internal.await(Latch.DEFAULT, TimeUnit.SECONDS)) {
                     throw new IllegalStateException("Timeout");
                 }
             }

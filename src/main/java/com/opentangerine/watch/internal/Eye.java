@@ -53,7 +53,7 @@ final class Eye implements Closeable {
      * {@link WatchService}.
      * @param dir Directory to watch.
      */
-    void register(final Path dir) {
+    public void register(final Path dir) {
         Unchecked.runnable(
             () -> {
                 this.watcher = FileSystems.getDefault().newWatchService();
@@ -86,7 +86,7 @@ final class Eye implements Closeable {
      * new events (if any).
      * @return Simple changes stream.
      */
-    Stream<Change.Simple> accept() {
+    public Stream<Change.Simple> accept() {
         final WatchKey key = Unchecked.supplier(
             () -> this.watcher.poll(Await.MOMENT, Await.UNIT)
         ).get();

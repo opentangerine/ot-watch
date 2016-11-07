@@ -33,15 +33,15 @@ public final class Native implements Watch {
     /**
      * Check when services are registered.
      */
-    private final Latch registration = new Latch();
+    private final Latch registration;
     /**
-     * Check when watch is disposed.
+     * Directory to watch.
      */
-    private final Latch disposed = new Latch();
+    private final Path dir;
     /**
      * Background thread for watching purposes.
      */
-    private final Thread thread;
+    private Thread thread;
     /**
      * Notification function.
      */
@@ -53,28 +53,31 @@ public final class Native implements Watch {
 
     /**
      * Ctor.
-     * @param dir Directory to watch.
+     * @param cdir Directory to watch.
      */
-    public Native(final Path dir) {
+    public Native(final Path cdir) {
+        this.registration = new Latch();
         this.notify = it -> { };
+        this.dir = cdir;
+    }
+
+    @Override
+    public Watch start() {
+        final Latch disposed = new Latch();
         this.thread = new Thread(
             Unchecked.runnable(
                 () -> {
                     try (Eye eye = new Eye()) {
-                        eye.register(dir);
+                        eye.register(this.dir);
                         this.registration.done();
                         while (this.running) {
                             eye.accept().forEach(it -> this.notify.accept(it));
                         }
                     }
-                    this.disposed.done();
+                    disposed.done();
                 }
             )
         );
-    }
-
-    @Override
-    public Watch start() {
         this.thread.start();
         this.running = true;
         return this;
