@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.apache.commons.io.FileUtils;
 import org.hamcrest.MatcherAssert;
@@ -202,11 +203,13 @@ public final class WatchTest {
      * @param changed Latch that is marked as done when we are notified about
      *  the file change.
      * @return Consumer that can be applied to the onChange function.
+     * @throws InterruptedException Never.
      */
     private static Consumer<Change> assertChange(
         final Path file,
         final Latch changed
-    ) {
+    ) throws InterruptedException {
+        TimeUnit.SECONDS.sleep(2L);
         return change -> {
             MatcherAssert.assertThat(
                 change.filename(),
