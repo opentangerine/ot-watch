@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.apache.commons.io.FileUtils;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
@@ -63,13 +64,7 @@ public final class WatchTest {
                 final Path file = sampleFile(directory);
                 try (Watch watch = new Native(directory.toPath())) {
                     watch.start().await().listen(
-                        change -> {
-                            MatcherAssert.assertThat(
-                                change.filename(),
-                                Matchers.equalTo(file.toFile().getName())
-                            );
-                            changed.done();
-                        }
+                        assertChange(file, changed)
                     );
                     changeFile(file);
                 }
@@ -89,13 +84,7 @@ public final class WatchTest {
                 final Path file = sampleFile(directory);
                 try (Watch watch = new Native(directory.toPath())) {
                     watch.start().await().listen(
-                        change -> {
-                            MatcherAssert.assertThat(
-                                change.filename(),
-                                Matchers.equalTo(file.toFile().getName())
-                            );
-                            changed.done();
-                        }
+                        assertChange(file, changed)
                     );
                     recreate(file);
                 }
@@ -117,23 +106,80 @@ public final class WatchTest {
                 final String dir = "content";
                 final Path content = temp.toPath().resolve(dir);
                 try (Watch watch = new Native(content)) {
-                    watch.start().listen(
-                        change -> {
-                            MatcherAssert.assertThat(
-                                change.filename(),
-                                Matchers.equalTo(WatchTest.SAMPLE)
-                            );
-                            changed.done();
-                        }
-                    );
-                    FileUtils.forceMkdir(content.toFile());
                     final Path file = temp.toPath()
                         .resolve(dir).resolve(WatchTest.SAMPLE);
+                    watch.start().listen(
+                        assertChange(file, changed)
+                    );
+                    FileUtils.forceMkdir(content.toFile());
                     watch.await();
                     changeFile(file);
                 }
             }
         );
+    }
+
+    /**
+     * When new file was added to the monitored directory we want to be notified
+     * about it.
+     * @throws Exception If fails.
+     */
+    @Test
+    public void notifiesWhenNewFileWasAdded() throws Exception {
+        withLatch(
+            changed -> {
+                final Path content = this.folder.newFolder().toPath();
+                try (Watch watch = new Native(content)) {
+                    final Path file = content.resolve(WatchTest.SAMPLE);
+                    watch.start().await().listen(
+                        assertChange(file, changed)
+                    );
+                    FileUtils.touch(file.toFile());
+                }
+            }
+        );
+    }
+
+    /**
+     * When file has been deleted then we want to be notified about it.
+     * @throws Exception If fails.
+     */
+    @Test
+    public void notifiesWhenExistingFileWasDeleted() throws Exception {
+        withLatch(
+            changed -> {
+                final Path content = this.folder.newFolder().toPath();
+                final Path file = content.resolve(WatchTest.SAMPLE);
+                FileUtils.touch(file.toFile());
+                try (Watch watch = new Native(content)) {
+                    watch.start().await().listen(
+                        assertChange(file, changed)
+                    );
+                    file.toFile().delete();
+                }
+            }
+        );
+    }
+
+    /**
+     * Mark latch as done when we're notified about the specific file.
+     *
+     * @param file File that should we
+     * @param changed Latch that is marked as done when we are notified about
+     *  the file change.
+     * @return Consumer that can be applied to the listen function.
+     */
+    private static Consumer<Change> assertChange(
+        final Path file,
+        final Latch changed
+    ) {
+        return change -> {
+            MatcherAssert.assertThat(
+                change.filename(),
+                Matchers.equalTo(file.toFile().getName())
+            );
+            changed.done();
+        };
     }
 
     /**

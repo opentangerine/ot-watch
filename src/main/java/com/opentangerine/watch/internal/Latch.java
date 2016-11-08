@@ -30,7 +30,7 @@ public final class Latch {
     /**
      * Default number of seconds to wait for the latch before giving up.
      */
-    private static final int DEFAULT = 3;
+    private static final int DEFAULT = 5;
 
     /**
      * Internal latch.
