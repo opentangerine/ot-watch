@@ -39,43 +39,55 @@ public final class Native implements Watch {
      */
     private final Thread thread;
     /**
-     * Notification function.
+     * Callback with the filechange payload.
      */
-    private Consumer<Change> notify;
+    private Consumer<Change> onchange;
     /**
-     * True if watch is running.
+     * Callback with the exception payload.
      */
-    private boolean running;
+    private Consumer<Exception> onerror;
 
     /**
      * Ctor.
      * @param dir Directory to watch.
+     * @checkstyle IllegalCatchCheck (50 lines)
      */
-    @SuppressWarnings("PMD.ConstructorOnlyInitializesOrCallOtherConstructors")
+    @SuppressWarnings(
+        {
+            "PMD.ConstructorOnlyInitializesOrCallOtherConstructors",
+            "PMD.AvoidCatchingGenericException"
+        }
+    )
     public Native(final Path dir) {
         final Latch disposed = new Latch();
         this.registration = new Latch();
-        this.notify = it -> { };
+        this.onchange = it -> { };
+        this.onerror = it -> {
+            throw new IllegalStateException(
+                "No `.error` handler is provided",
+                it
+            );
+        };
         this.thread = new Thread(
-            Unchecked.runnable(
-                () -> {
-                    try (Eye eye = new Eye()) {
-                        eye.register(dir);
-                        this.registration.done();
-                        while (this.running) {
-                            eye.accept().forEach(it -> this.notify.accept(it));
-                        }
+            () -> {
+                try (Eye eye = new Eye()) {
+                    eye.register(dir);
+                    this.registration.done();
+                    while (!Thread.interrupted()) {
+                        eye.accept().forEach(it -> this.onchange.accept(it));
                     }
-                    disposed.done();
+                } catch (final InterruptedException inter) {
+                } catch (final Exception exc) {
+                    this.onerror.accept(exc);
                 }
-            )
+                disposed.done();
+            }
         );
     }
 
     @Override
     public Watch start() {
         this.thread.start();
-        this.running = true;
         return this;
     }
 
@@ -86,14 +98,20 @@ public final class Native implements Watch {
     }
 
     @Override
-    public Watch listen(final Consumer<Change> change) {
-        this.notify = change.andThen(change);
+    public Watch change(final Consumer<Change> callback) {
+        this.onchange = callback;
+        return this;
+    }
+
+    @Override
+    public Watch error(final Consumer<Exception> callback) {
+        this.onerror = callback;
         return this;
     }
 
     @Override
     public void close() throws IOException {
-        this.running = false;
+        this.thread.interrupt();
         Unchecked.runnable(this.thread::join).run();
     }
 }
