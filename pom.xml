@@ -85,7 +85,7 @@
 
     <profiles>
         <profile>
-            <id>style</id>
+            <id>qulice</id>
             <build>
                 <plugins>
                     <plugin>
