@@ -29,7 +29,6 @@ import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Optional;
 import java.util.stream.Stream;
-import org.jooq.lambda.Unchecked;
 
 /**
  * Facade around {@link WatchService}.
@@ -45,51 +44,49 @@ final class Eye implements Closeable {
 
     @Override
     public void close() throws IOException {
-        this.watcher.close();
+        if (this.watcher != null) {
+            this.watcher.close();
+        }
     }
 
     /**
      * Register the given directory, and all its sub-directories with the
      * {@link WatchService}.
      * @param dir Directory to watch.
+     * @throws IOException When unable to register the service.
      */
-    public void register(final Path dir) {
-        Unchecked.runnable(
-            () -> {
-                this.watcher = FileSystems.getDefault().newWatchService();
-                Await.whileTrue(() -> !dir.toFile().exists());
-                Files.walkFileTree(
-                    dir,
-                    new SimpleFileVisitor<Path>() {
-                        @Override
-                        public FileVisitResult preVisitDirectory(
-                            final Path directory,
-                            final BasicFileAttributes attrs
-                        )
-                            throws IOException {
-                            directory.register(
-                                Eye.this.watcher,
-                                StandardWatchEventKinds.ENTRY_CREATE,
-                                StandardWatchEventKinds.ENTRY_DELETE,
-                                StandardWatchEventKinds.ENTRY_MODIFY
-                            );
-                            return FileVisitResult.CONTINUE;
-                        }
-                    }
-                );
+    public void register(final Path dir) throws IOException {
+        this.watcher = FileSystems.getDefault().newWatchService();
+        Await.whileTrue(() -> !dir.toFile().exists());
+        Files.walkFileTree(
+            dir,
+            new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(
+                    final Path directory,
+                    final BasicFileAttributes attrs
+                )
+                    throws IOException {
+                    directory.register(
+                        Eye.this.watcher,
+                        StandardWatchEventKinds.ENTRY_CREATE,
+                        StandardWatchEventKinds.ENTRY_DELETE,
+                        StandardWatchEventKinds.ENTRY_MODIFY
+                    );
+                    return FileVisitResult.CONTINUE;
+                }
             }
-        ).run();
+        );
     }
 
     /**
      * Poll events from the watcher service and return stream of
      * new events (if any).
      * @return Simple changes stream.
+     * @throws InterruptedException On interruption.
      */
-    public Stream<Change.Simple> accept() {
-        final WatchKey key = Unchecked.supplier(
-            () -> this.watcher.poll(Await.MOMENT, Await.UNIT)
-        ).get();
+    public Stream<Change.Simple> accept() throws InterruptedException {
+        final WatchKey key = this.watcher.poll(Await.MOMENT, Await.UNIT);
         return Optional.ofNullable(key)
             .map(wk -> wk.pollEvents().stream().map(Change.Simple::new))
             .orElse(Stream.empty());

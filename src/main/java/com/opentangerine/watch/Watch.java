@@ -38,11 +38,18 @@ public interface Watch extends Closeable {
     Watch await();
 
     /**
-     * Add callback executed on directory change.
+     * Overrides callback executed on file change.
      * @param change Consumer executed on change.
      * @return Self.
      */
-    Watch listen(Consumer<Change> change);
+    Watch change(Consumer<Change> change);
+
+    /**
+     * Overrides callback executed in exceptional case.
+     * @param callback Consumer executed on exceptional state.
+     * @return Self.
+     */
+    Watch error(Consumer<Exception> callback);
 
 }
 

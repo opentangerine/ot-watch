@@ -22,12 +22,13 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.apache.commons.io.FileUtils;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 import org.jooq.lambda.Unchecked;
+import org.jooq.lambda.UncheckedException;
 import org.jooq.lambda.fi.util.function.CheckedConsumer;
 import org.junit.Rule;
 import org.junit.Test;
@@ -40,6 +41,7 @@ import org.junit.rules.TemporaryFolder;
  * @version $Id$
  * @since 1.0
  */
+@SuppressWarnings("PMD.TooManyMethods")
 public final class WatchTest {
     /**
      * Name of the sample file.
@@ -58,12 +60,12 @@ public final class WatchTest {
      */
     @Test
     public void notifiesOnFileContentChange() throws Exception {
-        this.withLatch(
+        withLatch(
             changed -> {
                 final File directory = this.folder.newFolder();
                 final Path file = sampleFile(directory);
                 try (Watch watch = new Native(directory.toPath())) {
-                    watch.start().await().listen(
+                    watch.start().await().change(
                         assertChange(file, changed)
                     );
                     changeFile(file);
@@ -78,12 +80,12 @@ public final class WatchTest {
      */
     @Test
     public void notifiesOnDirectoryRecreation() throws Exception {
-        this.withLatch(
+        withLatch(
             changed -> {
                 final File directory = this.folder.newFolder();
                 final Path file = sampleFile(directory);
                 try (Watch watch = new Native(directory.toPath())) {
-                    watch.start().await().listen(
+                    watch.start().await().change(
                         assertChange(file, changed)
                     );
                     recreate(file);
@@ -100,7 +102,7 @@ public final class WatchTest {
      */
     @Test
     public void notifiesEvenIfRegisterBeforeDirCreation() throws Exception {
-        this.withLatch(
+        withLatch(
             changed -> {
                 final File temp = this.folder.newFolder();
                 final String dir = "content";
@@ -108,7 +110,7 @@ public final class WatchTest {
                 try (Watch watch = new Native(content)) {
                     final Path file = temp.toPath()
                         .resolve(dir).resolve(WatchTest.SAMPLE);
-                    watch.start().listen(
+                    watch.start().change(
                         assertChange(file, changed)
                     );
                     FileUtils.forceMkdir(content.toFile());
@@ -131,7 +133,7 @@ public final class WatchTest {
                 final Path content = this.folder.newFolder().toPath();
                 try (Watch watch = new Native(content)) {
                     final Path file = content.resolve(WatchTest.SAMPLE);
-                    watch.start().await().listen(
+                    watch.start().await().change(
                         assertChange(file, changed)
                     );
                     FileUtils.touch(file.toFile());
@@ -152,7 +154,7 @@ public final class WatchTest {
                 final Path file = content.resolve(WatchTest.SAMPLE);
                 FileUtils.touch(file.toFile());
                 try (Watch watch = new Native(content)) {
-                    watch.start().await().listen(
+                    watch.start().await().change(
                         assertChange(file, changed)
                     );
                     file.toFile().delete();
@@ -162,17 +164,52 @@ public final class WatchTest {
     }
 
     /**
+     * Exception when thread was interrupted.
+     */
+    @Test(expected = UncheckedException.class)
+    public void notifiesIfLatchIsNotClosed() {
+        final Latch done = new Latch();
+        Thread.currentThread().interrupt();
+        done.await();
+    }
+
+    /**
+     * If exception is thrown withing the listening block, watch should
+     * stop listening and trigger error callback.
+     * @throws Exception If fails.
+     */
+    @Test
+    public void notifiesAboutTheExceptionViaCallback() throws Exception {
+        final Latch done = new Latch();
+        final Path content = this.folder.newFolder().toPath();
+        final RuntimeException exc = new RuntimeException("Failure");
+        try (Watch watch = new Native(content)) {
+            watch.start().await().change(change -> { throw exc; }).error(
+                exception -> {
+                    MatcherAssert
+                        .assertThat(exc, Matchers.equalTo(exception));
+                    done.done();
+                }
+            );
+            FileUtils.touch(content.resolve("file1.txt").toFile());
+            done.await();
+        }
+    }
+
+    /**
      * Mark latch as done when we're notified about the specific file.
      *
      * @param file File that should we
      * @param changed Latch that is marked as done when we are notified about
      *  the file change.
-     * @return Consumer that can be applied to the listen function.
+     * @return Consumer that can be applied to the onChange function.
+     * @throws InterruptedException Never.
      */
     private static Consumer<Change> assertChange(
         final Path file,
         final Latch changed
-    ) {
+    ) throws InterruptedException {
+        TimeUnit.SECONDS.sleep(2L);
         return change -> {
             MatcherAssert.assertThat(
                 change.filename(),
@@ -201,7 +238,7 @@ public final class WatchTest {
     private static void changeFile(final Path file) throws IOException {
         FileUtils.writeStringToFile(
             file.toFile(),
-            UUID.randomUUID().toString(),
+            String.valueOf(System.currentTimeMillis()),
             StandardCharsets.UTF_8
         );
     }
