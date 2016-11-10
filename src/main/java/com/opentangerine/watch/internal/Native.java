@@ -18,9 +18,20 @@ package com.opentangerine.watch.internal;
 import com.opentangerine.watch.Change;
 import com.opentangerine.watch.Watch;
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.function.Consumer;
-import org.jooq.lambda.Unchecked;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Native implementation of Watch which is using WatchEvents internally.
@@ -31,26 +42,14 @@ import org.jooq.lambda.Unchecked;
  */
 public final class Native implements Watch {
     /**
-     * Check when services are registered.
+     * Native service instance.
      */
-    private final Latch registration;
-    /**
-     * Background thread for watching purposes.
-     */
-    private final Thread thread;
-    /**
-     * Callback with the filechange payload.
-     */
-    private Consumer<Change> onchange;
-    /**
-     * Callback with the exception payload.
-     */
-    private Consumer<Exception> onerror;
+    private final WatchService watcher;
 
     /**
      * Ctor.
      * @param dir Directory to watch.
-     * @checkstyle IllegalCatchCheck (50 lines)
+     * @throws IOException On error.
      */
     @SuppressWarnings(
         {
@@ -58,60 +57,66 @@ public final class Native implements Watch {
             "PMD.AvoidCatchingGenericException"
         }
     )
-    public Native(final Path dir) {
-        final Latch disposed = new Latch();
-        this.registration = new Latch();
-        this.onchange = it -> { };
-        this.onerror = it -> {
-            throw new IllegalStateException(
-                "No `.error` handler is provided",
-                it
-            );
-        };
-        this.thread = new Thread(
-            () -> {
-                try (Eye eye = new Eye()) {
-                    eye.register(dir);
-                    this.registration.done();
-                    while (!Thread.interrupted()) {
-                        eye.accept().forEach(it -> this.onchange.accept(it));
-                    }
-                } catch (final InterruptedException inter) {
-                } catch (final Exception exc) {
-                    this.onerror.accept(exc);
+    public Native(final Path dir) throws IOException {
+        this.watcher = FileSystems.getDefault().newWatchService();
+        Await.whileTrue(() -> !dir.toFile().exists());
+        Files.walkFileTree(
+            dir,
+            new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult preVisitDirectory(
+                    final Path directory,
+                    final BasicFileAttributes attrs
+                )
+                    throws IOException {
+                    directory.register(
+                        Native.this.watcher,
+                        StandardWatchEventKinds.ENTRY_CREATE,
+                        StandardWatchEventKinds.ENTRY_DELETE,
+                        StandardWatchEventKinds.ENTRY_MODIFY
+                    );
+                    return FileVisitResult.CONTINUE;
                 }
-                disposed.done();
             }
         );
     }
 
     @Override
-    public Watch start() {
-        this.thread.start();
-        return this;
-    }
-
-    @Override
-    public Watch await() {
-        this.registration.await();
-        return this;
-    }
-
-    @Override
-    public Watch change(final Consumer<Change> callback) {
-        this.onchange = callback;
-        return this;
-    }
-
-    @Override
-    public Watch error(final Consumer<Exception> callback) {
-        this.onerror = callback;
-        return this;
-    }
-
-    @Override
     public void close() throws IOException {
-        this.thread.interrupt();
-        Unchecked.runnable(this.thread::join).run();
+        this.watcher.close();
+    }
+
+    @Override
+    public Iterable<List<Change.Simple>> changes() {
+        return () -> new Iterator<List<Change.Simple>>() {
+            @Override
+            public boolean hasNext() {
+                return true;
+            }
+
+            @Override
+            public List<Change.Simple> next() {
+                while (true) {
+                    final List<Change.Simple> pack = Native.this.accept();
+                    if (!pack.isEmpty()) {
+                        return pack;
+                    }
+                    Await.moment();
+                }
+            }
+        };
+    }
+
+    /**
+     * Poll events from the watcher service and return stream of
+     * new events (if any). Returning immediately if no changes.
+     * @return Simple changes stream.
+     */
+    private List<Change.Simple> accept() {
+        final WatchKey key = this.watcher.poll();
+        return Optional.ofNullable(key)
+            .map(wk -> wk.pollEvents().stream().map(Change.Simple::new))
+            .orElse(Stream.empty())
+            .collect(Collectors.toList());
     }
 }
