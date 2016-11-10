@@ -16,7 +16,7 @@
 package com.opentangerine.watch;
 
 import java.io.Closeable;
-import java.util.function.Consumer;
+import java.util.List;
 
 /**
  * Watch directory for changes.
@@ -27,29 +27,12 @@ import java.util.function.Consumer;
  */
 public interface Watch extends Closeable {
     /**
-     * Start watching (can be used only one time).
-     * @return Self.
+     * Execution of this method is blocking, application is waiting for the
+     * data available. Iterator will return next list of changes. List of
+     * changes should never be empty.
+     *
+     * @return Iterable.
      */
-    Watch start();
-    /**
-     * Wait for successful filesystem events registration.
-     * @return Self.
-     */
-    Watch await();
-
-    /**
-     * Overrides callback executed on file change.
-     * @param change Consumer executed on change.
-     * @return Self.
-     */
-    Watch change(Consumer<Change> change);
-
-    /**
-     * Overrides callback executed in exceptional case.
-     * @param callback Consumer executed on exceptional state.
-     * @return Self.
-     */
-    Watch error(Consumer<Exception> callback);
-
+    Iterable<List<Change.Simple>> changes();
 }
 

@@ -16,20 +16,19 @@
 package com.opentangerine.watch;
 
 import com.opentangerine.watch.internal.Await;
-import com.opentangerine.watch.internal.Latch;
 import com.opentangerine.watch.internal.Native;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import org.apache.commons.io.FileUtils;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 import org.jooq.lambda.Unchecked;
-import org.jooq.lambda.UncheckedException;
-import org.jooq.lambda.fi.util.function.CheckedConsumer;
+import org.jooq.lambda.fi.lang.CheckedRunnable;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -43,10 +42,6 @@ import org.junit.rules.TemporaryFolder;
  */
 @SuppressWarnings("PMD.TooManyMethods")
 public final class WatchTest {
-    /**
-     * Name of the sample file.
-     */
-    private static final String SAMPLE = "sample.file";
 
     /**
      * Create temp directory for each test.
@@ -60,18 +55,12 @@ public final class WatchTest {
      */
     @Test
     public void notifiesOnFileContentChange() throws Exception {
-        withLatch(
-            changed -> {
-                final File directory = this.folder.newFolder();
-                final Path file = sampleFile(directory);
-                try (Watch watch = new Native(directory.toPath())) {
-                    watch.start().await().change(
-                        assertChange(file, changed)
-                    );
-                    changeFile(file);
-                }
-            }
-        );
+        final File directory = this.folder.newFolder();
+        final Path file = sampleFile(directory);
+        try (Watch watch = new Native(directory.toPath())) {
+            changeFile(file);
+            matchFirst(watch, file);
+        }
     }
 
     /**
@@ -80,18 +69,12 @@ public final class WatchTest {
      */
     @Test
     public void notifiesOnDirectoryRecreation() throws Exception {
-        withLatch(
-            changed -> {
-                final File directory = this.folder.newFolder();
-                final Path file = sampleFile(directory);
-                try (Watch watch = new Native(directory.toPath())) {
-                    watch.start().await().change(
-                        assertChange(file, changed)
-                    );
-                    recreate(file);
-                }
-            }
-        );
+        final File directory = this.folder.newFolder();
+        final Path file = sampleFile(directory);
+        try (Watch watch = new Native(directory.toPath())) {
+            recreate(file);
+            matchFirst(watch, file);
+        }
     }
 
     /**
@@ -100,25 +83,24 @@ public final class WatchTest {
      * which are going to be created in near future.
      * @throws Exception If fails.
      */
-    @Test
+    @Test(timeout = 2000)
     public void notifiesEvenIfRegisterBeforeDirCreation() throws Exception {
-        withLatch(
-            changed -> {
-                final File temp = this.folder.newFolder();
-                final String dir = "content";
-                final Path content = temp.toPath().resolve(dir);
-                try (Watch watch = new Native(content)) {
-                    final Path file = temp.toPath()
-                        .resolve(dir).resolve(WatchTest.SAMPLE);
-                    watch.start().change(
-                        assertChange(file, changed)
-                    );
-                    FileUtils.forceMkdir(content.toFile());
-                    watch.await();
-                    changeFile(file);
-                }
+        final File temp = this.folder.newFolder();
+        final String dir = "content";
+        final Path content = temp.toPath().resolve(dir);
+        final Path file = content.resolve("custom.file");
+        final CountDownLatch started = new CountDownLatch(1);
+        thread(
+            () -> {
+                FileUtils.forceMkdir(content.toFile());
+                started.await();
+                changeFile(file);
             }
         );
+        try (Watch watch = new Native(content)) {
+            started.countDown();
+            matchFirst(watch, file);
+        }
     }
 
     /**
@@ -128,18 +110,12 @@ public final class WatchTest {
      */
     @Test
     public void notifiesWhenNewFileWasAdded() throws Exception {
-        withLatch(
-            changed -> {
-                final Path content = this.folder.newFolder().toPath();
-                try (Watch watch = new Native(content)) {
-                    final Path file = content.resolve(WatchTest.SAMPLE);
-                    watch.start().await().change(
-                        assertChange(file, changed)
-                    );
-                    FileUtils.touch(file.toFile());
-                }
-            }
-        );
+        final File directory = this.folder.newFolder();
+        try (Watch watch = new Native(directory.toPath())) {
+            final Path file = sampleFile(directory);
+            FileUtils.touch(file.toFile());
+            matchFirst(watch, file);
+        }
     }
 
     /**
@@ -148,86 +124,38 @@ public final class WatchTest {
      */
     @Test
     public void notifiesWhenExistingFileWasDeleted() throws Exception {
-        withLatch(
-            changed -> {
-                final Path content = this.folder.newFolder().toPath();
-                final Path file = content.resolve(WatchTest.SAMPLE);
-                FileUtils.touch(file.toFile());
-                try (Watch watch = new Native(content)) {
-                    watch.start().await().change(
-                        assertChange(file, changed)
-                    );
-                    file.toFile().delete();
-                }
-            }
-        );
-    }
-
-    /**
-     * Exception when thread was interrupted.
-     */
-    @Test(expected = UncheckedException.class)
-    public void notifiesIfLatchIsNotClosed() {
-        final Latch done = new Latch();
-        Thread.currentThread().interrupt();
-        done.await();
-    }
-
-    /**
-     * If exception is thrown withing the listening block, watch should
-     * stop listening and trigger error callback.
-     * @throws Exception If fails.
-     */
-    @Test
-    public void notifiesAboutTheExceptionViaCallback() throws Exception {
-        final Latch done = new Latch();
-        final Path content = this.folder.newFolder().toPath();
-        final RuntimeException exc = new RuntimeException("Failure");
-        try (Watch watch = new Native(content)) {
-            watch.start().await().change(change -> { throw exc; }).error(
-                exception -> {
-                    MatcherAssert
-                        .assertThat(exc, Matchers.equalTo(exception));
-                    done.done();
-                }
-            );
-            FileUtils.touch(content.resolve("file1.txt").toFile());
-            done.await();
+        final File directory = this.folder.newFolder();
+        final Path file = sampleFile(directory);
+        FileUtils.touch(file.toFile());
+        try (Watch watch = new Native(directory.toPath())) {
+            file.toFile().delete();
+            matchFirst(watch, file);
         }
     }
 
     /**
-     * Mark latch as done when we're notified about the specific file.
-     *
-     * @param file File that should we
-     * @param changed Latch that is marked as done when we are notified about
-     *  the file change.
-     * @return Consumer that can be applied to the onChange function.
-     * @throws InterruptedException Never.
+     * Asset that first change is related with the specific file.
+     * @param watch Watch service.
+     * @param file File to check.
      */
-    private static Consumer<Change> assertChange(
-        final Path file,
-        final Latch changed
-    ) throws InterruptedException {
-        TimeUnit.SECONDS.sleep(2L);
-        return change -> {
-            MatcherAssert.assertThat(
-                change.filename(),
-                Matchers.equalTo(file.toFile().getName())
-            );
-            changed.done();
-        };
+    private static void matchFirst(final Watch watch, final Path file) {
+        final Iterator<List<Change.Simple>> iter = watch.changes().iterator();
+        MatcherAssert.assertThat(
+            iter.hasNext(),
+            Matchers.is(true)
+        );
+        MatcherAssert.assertThat(
+            iter.next().get(0).filename(),
+            Matchers.equalTo(file.toFile().getName())
+        );
     }
 
     /**
-     * Run the consumer and wait for the latch to be completed.
-     *
-     * @param consumer Function that should mark the latch as done.
+     * Execute unchecked runnable.
+     * @param runnable Unchecked runnable.
      */
-    private static void withLatch(final CheckedConsumer<Latch> consumer) {
-        final Latch done = new Latch();
-        Unchecked.consumer(consumer).accept(done);
-        done.await();
+    private static void thread(final CheckedRunnable runnable) {
+        new Thread(Unchecked.runnable(runnable)).start();
     }
 
     /**
@@ -250,7 +178,7 @@ public final class WatchTest {
      * @throws IOException If fails.
      */
     private static Path sampleFile(final File directory) throws IOException {
-        final Path file = directory.toPath().resolve(WatchTest.SAMPLE);
+        final Path file = directory.toPath().resolve("sample.file");
         FileUtils.writeStringToFile(file.toFile(), "1", StandardCharsets.UTF_8);
         return file;
     }
@@ -266,11 +194,8 @@ public final class WatchTest {
         final File dir = file.getParent().toFile();
         FileUtils.cleanDirectory(dir);
         FileUtils.deleteDirectory(dir);
-        final int retries = 10;
-        for (int retry = 0; retry < retries || !dir.exists(); retry += 1) {
-            Await.moment();
-            FileUtils.forceMkdir(dir);
-        }
+        Await.moment();
+        FileUtils.forceMkdir(dir);
         changeFile(file);
     }
 
