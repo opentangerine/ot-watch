@@ -83,7 +83,7 @@ public final class WatchTest {
      * which are going to be created in near future.
      * @throws Exception If fails.
      */
-    @Test(timeout = 2000)
+    @Test
     public void notifiesEvenIfRegisterBeforeDirCreation() throws Exception {
         final File temp = this.folder.newFolder();
         final String dir = "content";

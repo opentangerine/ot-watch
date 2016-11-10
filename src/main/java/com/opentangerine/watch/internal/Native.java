@@ -44,12 +44,19 @@ public final class Native implements Watch {
     /**
      * Native service instance.
      */
-    private WatchService watcher;
+    private final WatchService watcher;
 
     /**
      * Ctor.
      * @param dir Directory to watch.
+     * @throws IOException On error.
      */
+    @SuppressWarnings(
+        {
+            "PMD.ConstructorOnlyInitializesOrCallOtherConstructors",
+            "PMD.AvoidCatchingGenericException"
+        }
+    )
     public Native(final Path dir) throws IOException {
         this.watcher = FileSystems.getDefault().newWatchService();
         Await.whileTrue(() -> !dir.toFile().exists());
