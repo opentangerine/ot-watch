@@ -92,6 +92,7 @@ public final class WatchTest {
         final CountDownLatch started = new CountDownLatch(1);
         thread(
             () -> {
+                Await.moment();
                 FileUtils.forceMkdir(content.toFile());
                 started.await();
                 changeFile(file);
