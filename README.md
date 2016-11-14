@@ -2,70 +2,34 @@
 
 [![Build Status](https://travis-ci.org/opentangerine/ot-watch.svg?branch=master)](https://travis-ci.org/opentangerine/ot-watch)
 
-* Watch is notifying even when directory is not yet created. It is going to wait
+`ot-watch` - is a library which simplifies the process of monitoring directories.
+It is watching dirs recursively and exposes all changes via simple `Change`
+interface.
 
-## Documentation
+## Usage
 
-Basic example how to use Watch.Native.
+Below you can find very simple example how to monitor specific file directory
+for the changes. We're going to print all files which changed.
 
 ```java
-{
-    final File directory = folder.newFolder();
-    final Path file = createSampleFile(directory);
-    final CountDownLatch done = new CountDownLatch(1);
-    try (Watch watch = new Native(directory.toPath())) {
-        watch.start().await().listen( change -> {
-            assertThat(change.filename(), equalTo(SAMPLE_FILENAME));
-            done.countDown();
-        });
-        changeFile(file);
-        if (!done.await(3, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted within the timeframe", false);
+try (Watch watch = new Native(Paths.get("/home"))) {
+    for(List<Change.Simple> change : watch.changes()) {
+        for(Change.Simple simple : change) {
+            System.out.println(simple.filename());
         }
     }
 }
 ```
 
-Even if directory deleted and created again, it's still listening.
+For the performance reasons all spotted changes are aggregated into the list.
 
-```java
-{
-    final File directory = folder.newFolder();
-    final Path file = createSampleFile(directory);
-    final CountDownLatch done = new CountDownLatch(1);
-    try (Watch watch = new Native(directory.toPath())) {
-        watch.start().await().listen( e -> {
-            assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
-            done.countDown();
-        });
-        recreate(file);
-        if (!done.await(1, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted withing the timeframe", false);
-        }
-    }
-}
+## Build
+
+```
+mvn clean install -Pcoverage,qulice
 ```
 
-If directory doesn't exists, it is going to be registered as soon as it is going to be created. Therefore we can listen for Paths which are going to be created in near future.
+## Contribution
 
-```java
-{
-    final CountDownLatch done = new CountDownLatch(1);
-    final File temp = folder.newFolder();
-    final Path content = temp.toPath().resolve("content");
-    try (Watch watch = new Native(content)) {
-        watch.start().listen( e -> {
-            assertThat(e.filename(), equalTo(SAMPLE_FILENAME));
-            done.countDown();
-        });
-        FileUtils.forceMkdir(content.toFile());
-        Path file = temp.toPath().resolve("content").resolve(SAMPLE_FILENAME);
-        watch.await();
-        changeFile(file);
-        if (!done.await(1, TimeUnit.SECONDS)) {
-            assertThat("Change not spotted withing the timeframe", false);
-        }
-    }
-}
-```
-
+If you would like to contribute something to the project, feel free to create
+PR or submit a ticket where we can start discussion.
