@@ -33,3 +33,7 @@ mvn clean install -Pcoverage,qulice
 
 If you would like to contribute something to the project, feel free to create
 PR or submit a ticket where we can start discussion.
+
+## License
+
+[Apache License, Version 2.0, January 2004](http://www.apache.org/licenses/LICENSE-2.0)
