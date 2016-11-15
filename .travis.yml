@@ -5,12 +5,9 @@ cache:
   directories:
     - $HOME/.m2
 script:
-  - echo COMPILE
-  - echo $TRAVIS_DIR
-  - echo $TRAVIS_BUILD_DIR/.travis
-#  - mvn clean install -Pcoverage,qulice --batch-mode --errors
-#after_success:
-#  - bash <(curl -s https://codecov.io/bash)
+  - mvn clean install -Pcoverage,qulice --batch-mode --errors
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
 env:
   global:
     - TRAVIS_DIR="$TRAVIS_BUILD_DIR/.travis"
