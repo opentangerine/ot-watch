@@ -13,7 +13,7 @@ script:
 #  - bash <(curl -s https://codecov.io/bash)
 env:
   global:
-    - TRAVIS_DIR="$TRAVIS_BUILD/.travis"
+    - TRAVIS_DIR="TRAVIS_BUILD_DIR/.travis"
 deploy:
   -
     provider: script
