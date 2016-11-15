@@ -17,13 +17,13 @@ env:
 deploy:
   -
     provider: script
-    script: $TRAVIS_DIR/publish.sh
+    script: sh $TRAVIS_DIR/publish.sh
     on:
       repo: opentangerine/ot-watch
       branch: master
   -
     provider: script
-    script: $TRAVIS_DIR/publish.sh
+    script: sh $TRAVIS_DIR/publish.sh
     on:
       repo: opentangerine/ot-watch
       tags: true
