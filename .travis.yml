@@ -5,7 +5,9 @@ cache:
   directories:
     - $HOME/.m2
 script:
-  - echo "COMPILE"
+  - echo COMPILE
+  - echo $TRAVIS_DIR
+  - echo $TRAVIS_BUILD/.travis
 #  - mvn clean install -Pcoverage,qulice --batch-mode --errors
 #after_success:
 #  - bash <(curl -s https://codecov.io/bash)
@@ -19,11 +21,9 @@ deploy:
     on:
       repo: opentangerine/ot-watch
       branch: master
-      jdk: oraclejdk8
   -
     provider: script
     script: $TRAVIS_DIR/publish.sh
     on:
       repo: opentangerine/ot-watch
       tags: true
-      jdk: oraclejdk8
