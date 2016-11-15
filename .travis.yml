@@ -5,12 +5,13 @@ cache:
   directories:
     - $HOME/.m2
 script:
-  - mvn clean install -Pcoverage,qulice --batch-mode --errors --settings $TRAVIS_DIR/settings.xml
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
+  - echo "COMPILE"
+#  - mvn clean install -Pcoverage,qulice --batch-mode --errors
+#after_success:
+#  - bash <(curl -s https://codecov.io/bash)
 env:
   global:
-    - TRAVIS_DIR="`pwd`/.travis"
+    - TRAVIS_DIR="$TRAVIS_BUILD/.travis"
 deploy:
   -
     provider: script
