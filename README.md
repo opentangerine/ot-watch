@@ -1,5 +1,7 @@
 ## Status
-[![codecov](https://codecov.io/gh/opentangerine/ot-watch/branch/master/graph/badge.svg)](https://codecov.io/gh/opentangerine/ot-watch)
+[![Sponsor](https://img.shields.io/badge/made%20by-opentangerine.com-brightgreen.svg)](http://opentangerine.com)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.opentangerine/ot-watch/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.opentangerine/ot-watch)
+[![Test Coverage](https://codecov.io/gh/opentangerine/ot-watch/branch/master/graph/badge.svg)](https://codecov.io/gh/opentangerine/ot-watch)
 [![Build Status](https://travis-ci.org/opentangerine/ot-watch.svg?branch=master)](https://travis-ci.org/opentangerine/ot-watch)
 
 `ot-watch` - is a library which simplifies the process of monitoring directories.
